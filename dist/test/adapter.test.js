@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { Config } from '../src/domain/config.js';
 import { AcpFailure } from '../lib/acp-rpc.js';
 import { createAntigravityRuntime } from '../lib/adapter.js';
@@ -221,8 +221,9 @@ test('an agent that does not offer the configured auth method is refused, not gu
     assert.deepEqual(agent.requests.map(request => request.method), ['initialize']);
     assert.equal(agent.disposals(), 1);
 });
-test('a file read inside the workspace is served and outside it is refused', async () => {
+test('a file read inside the workspace is served and outside it is refused', async (t) => {
     const directory = await mkdtemp('/tmp/agy-roots-');
+    t.after(() => rm(directory, { recursive: true, force: true }));
     await writeFile(`${directory}/note.txt`, 'inside');
     const agent = fakeAgent();
     const { adapter } = runtime(agent);
