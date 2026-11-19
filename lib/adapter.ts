@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve, sep } from 'node:path'
-import { AcpFailure, AcpRpc, type AcpTransport } from './acp-rpc.js'
+import { AcpError, AcpFailure, AcpRpc, type AcpTransport } from './acp-rpc.js'
 import { initialRunState, nextRunState, settleRunState } from './run.machine.js'
 import {
   PROTOCOL_VERSION,
@@ -244,7 +244,13 @@ export function createAntigravityRuntime({ config, env = process.env, getApiKey,
       if (!offered.some(method => method.id === config.auth.mode)) {
         throw new AcpFailure('initialize', `the agent does not offer the ${config.auth.mode} authentication method`)
       }
-      await rpc.request('authenticate', { methodId: config.auth.mode }, config.timeouts.initMs)
+      try {
+        await rpc.request('authenticate', { methodId: config.auth.mode }, config.timeouts.initMs)
+      } catch (error) {
+        if (error instanceof AcpError && error.code === -32000) throw error
+        // Client-owned text: the agent's sign-in guidance never becomes a harness error.
+        throw new AcpFailure('initialize', `the agent refused the ${config.auth.mode} credentials`)
+      }
       const capabilities = asRecord(asRecord(init['agentCapabilities'])?.['sessionCapabilities']) ?? {}
       resumeSupported = capabilities['resume'] !== undefined
       const opened = await rpc.request(
