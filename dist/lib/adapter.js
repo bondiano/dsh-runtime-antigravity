@@ -171,6 +171,13 @@ export function createAntigravityRuntime({ config, env = process.env, getApiKey,
             if (init['protocolVersion'] !== PROTOCOL_VERSION) {
                 throw new AcpFailure('initialize', `the agent answered protocol version ${String(init['protocolVersion'])}`);
             }
+            // Select the configured method explicitly: an isolated app-data profile has no consumer login,
+            // and an agent that does not offer the method is refused rather than answered by a fallback.
+            const offered = Array.isArray(init['authMethods']) ? init['authMethods'] : [];
+            if (!offered.some(method => method.id === config.auth.mode)) {
+                throw new AcpFailure('initialize', `the agent does not offer the ${config.auth.mode} authentication method`);
+            }
+            await rpc.request('authenticate', { methodId: config.auth.mode }, config.timeouts.initMs);
             const capabilities = asRecord(asRecord(init['agentCapabilities'])?.['sessionCapabilities']) ?? {};
             resumeSupported = capabilities['resume'] !== undefined;
             const opened = await rpc.request(existingId === undefined ? 'session/new' : 'session/resume', existingId === undefined ? { cwd, mcpServers: [] } : { sessionId: existingId, cwd, mcpServers: [] }, config.timeouts.initMs);

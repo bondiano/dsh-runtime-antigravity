@@ -37,7 +37,8 @@ test('create applies model and thinking level and keeps the agent cwd', async ()
   const agent = fakeAgent({ configOptions: MODELS })
   const { adapter, spawned } = runtime(agent, { sandbox: true, addDirs: ['/abs/extra'] })
   assert.deepEqual(await adapter.create({ cwd: '/tmp/work', model: 'b', reasoningEffort: 'HIGH' }), { id: 's1', cwd: '/tmp/work' })
-  assert.deepEqual(spawned[0]?.args, ['acp', '--add-dir', '/abs/extra', '--sandbox', '--process-per-session'])
+  assert.deepEqual(spawned[0]?.args, ['acp', '--app-data-dir', 'antigravity-harness', '--add-dir', '/abs/extra', '--sandbox', '--process-per-session'])
+  assert.deepEqual(agent.requests[1]?.params, { methodId: 'gemini-api-key' })
   assert.deepEqual(agent.requests[0]?.params['clientCapabilities'], { fs: { readTextFile: true, writeTextFile: false } })
   const applied = agent.requests.filter(request => request.method === 'session/set_config_option').map(request => request.params)
   assert.deepEqual(applied, [
@@ -184,14 +185,14 @@ test('resume reuses a live child, reconnects a dead one and refuses when unadver
     createRpc: () => agents[spawns++] as FakeAgent,
   })
   await adapter.create({ cwd: '/tmp/work' })
-  assert.deepEqual(first.requests.map(request => request.method), ['initialize', 'session/new'])
+  assert.deepEqual(first.requests.map(request => request.method), ['initialize', 'authenticate', 'session/new'])
   assert.deepEqual(await adapter.resume('s1', { cwd: '/tmp/work' }), { id: 's1', cwd: '/tmp/work' })
   assert.equal(spawns, 1)
   // A dead child is replaced, and the session is reconnected through session/resume.
   Object.assign(first, { error: new Error('the process exited') })
   await adapter.resume('s1', { cwd: '/tmp/work' })
   assert.equal(spawns, 2)
-  assert.deepEqual(second.requests.map(request => request.method), ['initialize', 'session/resume'])
+  assert.deepEqual(second.requests.map(request => request.method), ['initialize', 'authenticate', 'session/resume'])
   await adapter.dispose()
 
   const plain = fakeAgent({ capabilities: {} })
@@ -223,6 +224,14 @@ test('the credential record wins over the environment and a missing key disposes
   await assert.rejects(keyless.create({ cwd: '/tmp/work' }), /dsh-antigravity\/default/)
   assert.equal(spawnedBare.length, 0)
   await keyless.dispose()
+})
+
+test('an agent that does not offer the configured auth method is refused, not guessed', async () => {
+  const agent = fakeAgent({ authMethods: [{ id: 'oauth-personal' }] })
+  const { adapter } = runtime(agent)
+  await assert.rejects(adapter.create({ cwd: '/tmp/work' }), /does not offer the gemini-api-key authentication method/)
+  assert.deepEqual(agent.requests.map(request => request.method), ['initialize'])
+  assert.equal(agent.disposals(), 1)
 })
 
 test('a file read inside the workspace is served and outside it is refused', async () => {

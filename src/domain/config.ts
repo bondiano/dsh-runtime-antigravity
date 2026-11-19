@@ -20,6 +20,8 @@ export interface AntigravityConfig {
   processPerSession: boolean
   disableTelemetry: boolean
   logFile?: string
+  /** Application data profile; keeps the consumer login out of reach of harness runs. */
+  appDataDir: string
   defaults: { model?: string; thoughtLevel?: string }
   /** `ask` surfaces a permission request to the harness UI; `allow`/`reject` answer it directly. */
   permission: PermissionPolicy
@@ -40,6 +42,7 @@ export const Config: Schema<AntigravityConfig> = Schema.object({
   processPerSession: Schema.boolean().default(true),
   disableTelemetry: Schema.boolean().default(false),
   logFile: Schema.string(),
+  appDataDir: Schema.string().default('antigravity-harness'),
   defaults: Schema.object({ model: Schema.string(), thoughtLevel: Schema.string() }).default({}),
   permission: Schema.union([Schema.const('ask'), Schema.const('allow'), Schema.const('reject')]).default('allow'),
   fsRead: Schema.boolean().default(true),
@@ -56,7 +59,8 @@ export const GATE_MESSAGE =
 
 /** Arguments of one child: the `acp` subcommand, then only fluent, allowlisted settings. */
 export function agentArguments(config: AntigravityConfig, extraAddDirs: readonly string[] = []): string[] {
-  const args = ['acp']
+  // The consumer login lives in another profile; `--app-data-dir` is a name, not a path.
+  const args = ['acp', '--app-data-dir', config.appDataDir]
   if (config.agent !== undefined) args.push('--agent', config.agent)
   for (const directory of [...config.addDirs, ...extraAddDirs]) args.push('--add-dir', directory)
   if (config.sandbox) args.push('--sandbox')

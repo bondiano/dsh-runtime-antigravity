@@ -17,6 +17,7 @@ export const Config = Schema.object({
     processPerSession: Schema.boolean().default(true),
     disableTelemetry: Schema.boolean().default(false),
     logFile: Schema.string(),
+    appDataDir: Schema.string().default('antigravity-harness'),
     defaults: Schema.object({ model: Schema.string(), thoughtLevel: Schema.string() }).default({}),
     permission: Schema.union([Schema.const('ask'), Schema.const('allow'), Schema.const('reject')]).default('allow'),
     fsRead: Schema.boolean().default(true),
@@ -30,7 +31,8 @@ export const Config = Schema.object({
 export const GATE_MESSAGE = 'Antigravity runtime disabled: harness use requires gemini-api-key or agent-platform (consumer oauth is interactive-only)';
 /** Arguments of one child: the `acp` subcommand, then only fluent, allowlisted settings. */
 export function agentArguments(config, extraAddDirs = []) {
-    const args = ['acp'];
+    // The consumer login lives in another profile; `--app-data-dir` is a name, not a path.
+    const args = ['acp', '--app-data-dir', config.appDataDir];
     if (config.agent !== undefined)
         args.push('--agent', config.agent);
     for (const directory of [...config.addDirs, ...extraAddDirs])

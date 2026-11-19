@@ -25,6 +25,12 @@ Consequences enforced here, not documented as advice:
 - `auth.mode` accepts `gemini-api-key` and `agent-platform` only; `oauth-personal` fails the schema.
 - Without a key the plugin registers nothing and logs one fixed line:
   `Antigravity runtime disabled: harness use requires gemini-api-key or agent-platform (consumer oauth is interactive-only)`.
+- Key modes run in their own application data profile (`appDataDir`, default `antigravity-harness`),
+  which holds no consumer login, so a run cannot silently ride cached consumer credentials. Verified
+  against `agy` 1.5.12: with an isolated profile and an invalid key the request fails with
+  `API key not valid`; with no key at all it fails with `-32000 Authentication required`.
+- `initialize` is followed by ACP `authenticate` with the configured method; an agent that does not
+  advertise it is refused instead of answered by a fallback.
 - Antigravity's own OAuth credential files and tokens are never read, copied or forwarded. The only
   credential seam is the harness record `dsh-antigravity/default`, then `$GEMINI_API_KEY`.
 - The interactive human surface lives in the omp extension (`extensions/omp/antigravity`), not here.
@@ -42,6 +48,7 @@ Consequences enforced here, not documented as advice:
 | `processPerSession` | `true` | `--process-per-session` (isolated worker per session) |
 | `disableTelemetry` | `false` | `--disable-telemetry` |
 | `logFile` | — | `--log-file <path>` |
+| `appDataDir` | `antigravity-harness` | `--app-data-dir <profile name>`; keeps the consumer login out of reach |
 | `defaults.model` | — | Applied through the session `model` config option when advertised |
 | `defaults.thoughtLevel` | — | Applied through `thought_level` (`low`/`medium`/`high`) |
 | `permission` | `allow` | `ask` surfaces a `permission` event for the harness UI; `allow`/`reject` answer it directly |

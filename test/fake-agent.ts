@@ -20,7 +20,7 @@ export interface FakeAgent extends AcpTransport {
 }
 
 export function fakeAgent(
-  options: { capabilities?: Record<string, unknown>; configOptions?: Record<string, unknown>[] } = {},
+  options: { capabilities?: Record<string, unknown>; configOptions?: Record<string, unknown>[]; authMethods?: { id: string }[] } = {},
 ): FakeAgent {
   const requests: FakeAgent['requests'] = []
   const notifications: FakeAgent['notifications'] = []
@@ -28,7 +28,12 @@ export function fakeAgent(
   let handlers: AcpHandlers | undefined
   let disposals = 0
   const responses: Map<string, Responder> = new Map()
-  responses.set('initialize', () => ({ protocolVersion: 1, agentCapabilities: { sessionCapabilities: options.capabilities ?? { resume: {}, close: {} } } }))
+  responses.set('initialize', () => ({
+    protocolVersion: 1,
+    authMethods: options.authMethods ?? [{ id: 'gemini-api-key' }, { id: 'agent-platform' }],
+    agentCapabilities: { sessionCapabilities: options.capabilities ?? { resume: {}, close: {} } },
+  }))
+  responses.set('authenticate', () => ({}))
   responses.set('session/new', () => ({ sessionId: 's1', configOptions: options.configOptions ?? [] }))
   responses.set('session/resume', () => ({ configOptions: options.configOptions ?? [] }))
   responses.set('session/set_config_option', params => ({
