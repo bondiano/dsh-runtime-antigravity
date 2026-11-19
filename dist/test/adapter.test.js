@@ -234,7 +234,7 @@ test('a file read inside the workspace is served and outside it is refused', asy
 });
 test('catalog reads the advertised model option from a throwaway session', async () => {
     const agent = fakeAgent({ configOptions: MODELS });
-    const { adapter } = runtime(agent);
+    const { adapter, spawned } = runtime(agent);
     assert.deepEqual(await adapter.catalog({ cwd: '/tmp/work' }), {
         models: [
             { id: 'a', name: 'A' },
@@ -242,6 +242,9 @@ test('catalog reads the advertised model option from a throwaway session', async
         ],
     });
     assert.equal(agent.disposals(), 1);
+    // The picker's child needs the same credentials and method as a run, or it cannot list models.
+    assert.equal(spawned[0]?.env?.['GEMINI_API_KEY'], 'from-env');
+    assert.deepEqual(agent.requests.map(request => request.method).slice(0, 2), ['initialize', 'authenticate']);
     const bare = fakeAgent();
     const { adapter: withoutModels } = runtime(bare);
     await assert.rejects(withoutModels.catalog({ cwd: '/tmp/work' }), /advertises no model option/);

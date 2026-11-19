@@ -107,6 +107,21 @@ export function createAntigravityRuntime({ config, env = process.env, getApiKey,
     return { ...env, GEMINI_API_KEY: key }
   }
 
+  /** Pick the configured method on a fresh child; the isolated profile holds no consumer login. */
+  async function selectMethod(rpc: AcpTransport, init: Record<string, unknown>): Promise<void> {
+    const offered = Array.isArray(init['authMethods']) ? (init['authMethods'] as { id?: string }[]) : []
+    if (!offered.some(method => method.id === config.auth.mode)) {
+      throw new AcpFailure('initialize', `the agent does not offer the ${config.auth.mode} authentication method`)
+    }
+    try {
+      await rpc.request('authenticate', { methodId: config.auth.mode }, config.timeouts.initMs)
+    } catch (error) {
+      if (error instanceof AcpError && error.code === -32000) throw error
+      // Client-owned text: the agent's sign-in guidance never becomes a harness error.
+      throw new AcpFailure('initialize', `the agent refused the ${config.auth.mode} credentials`)
+    }
+  }
+
   /** A permission prompt is answered by policy, or surfaced to the harness and awaited. */
   async function permission(session: Session, params: Record<string, unknown>): Promise<unknown> {
     const options = Array.isArray(params['options']) ? (params['options'] as PermissionOption[]) : []
@@ -238,19 +253,7 @@ export function createAntigravityRuntime({ config, env = process.env, getApiKey,
       if (init['protocolVersion'] !== PROTOCOL_VERSION) {
         throw new AcpFailure('initialize', `the agent answered protocol version ${String(init['protocolVersion'])}`)
       }
-      // Select the configured method explicitly: an isolated app-data profile has no consumer login,
-      // and an agent that does not offer the method is refused rather than answered by a fallback.
-      const offered = Array.isArray(init['authMethods']) ? (init['authMethods'] as { id?: string }[]) : []
-      if (!offered.some(method => method.id === config.auth.mode)) {
-        throw new AcpFailure('initialize', `the agent does not offer the ${config.auth.mode} authentication method`)
-      }
-      try {
-        await rpc.request('authenticate', { methodId: config.auth.mode }, config.timeouts.initMs)
-      } catch (error) {
-        if (error instanceof AcpError && error.code === -32000) throw error
-        // Client-owned text: the agent's sign-in guidance never becomes a harness error.
-        throw new AcpFailure('initialize', `the agent refused the ${config.auth.mode} credentials`)
-      }
+      await selectMethod(rpc, init)
       const capabilities = asRecord(asRecord(init['agentCapabilities'])?.['sessionCapabilities']) ?? {}
       resumeSupported = capabilities['resume'] !== undefined
       const opened = await rpc.request(
@@ -380,9 +383,10 @@ export function createAntigravityRuntime({ config, env = process.env, getApiKey,
     },
     async catalog({ cwd }: { cwd?: string } = {}) {
       const directory = cwd ?? process.cwd()
-      const rpc = transport(directory, [], env)
+      const rpc = transport(directory, [], await childEnvironment())
       try {
-        await rpc.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {}, clientInfo: { name: 'dsh-antigravity', version: '1.0.0' } }, config.timeouts.initMs)
+        const init = await rpc.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {}, clientInfo: { name: 'dsh-antigravity', version: '1.0.0' } }, config.timeouts.initMs)
+        await selectMethod(rpc, init)
         const opened = await rpc.request('session/new', { cwd: directory, mcpServers: [] }, config.timeouts.initMs)
         const option = configOption(Array.isArray(opened['configOptions']) ? (opened['configOptions'] as ConfigOption[]) : [], 'model')
         if (option === undefined) throw new AcpFailure('new-session', 'the agent advertises no model option')
